@@ -1,0 +1,39 @@
+{
+	"schemaVersion": 1,
+	"id": "closeonmove",
+	"version": "${version}",
+	"name": "CloseOnMove",
+	"description": "Close in-game GUI's when movement keys are pressed, so you can make a quick getaway!",
+	"authors": [
+		"heldheld"
+	],
+	"contact": {
+		"homepage": "https://github.com/heldheld/CloseOnMove",
+		"sources": "https://github.com/heldheld/CloseOnMove"
+	},
+	"license": "MIT",
+	"icon": "assets/closeonmove/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.heldheld.closeonmove.CloseOnMove"
+		],
+		"fabric-datagen": [
+			"com.heldheld.closeonmove.CloseOnMoveDataGenerator"
+		],
+		"client": [
+			"com.heldheld.closeonmove.CloseOnMoveClient"
+		],
+		"modmenu": [
+			"com.heldheld.closeonmove.config.ModMenuIntegration"
+		]
+	},
+	"mixins": [
+		"closeonmove.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.15.10",
+		"minecraft": ">=1.20.3",
+		"java": ">=21"
+	}
+}

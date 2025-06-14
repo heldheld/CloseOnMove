@@ -30,12 +30,12 @@ public class CloseOnMoveClient implements ClientModInitializer {
     }
 
     private boolean isClosableScreen(Screen screen) {
-        // Debug logging to see what screen classes we're dealing with
+        // Debug logging to see what screen classes are used
         String screenClassName = screen.getClass().getSimpleName();
         String packageName = screen.getClass().getPackage().getName();
         //CloseOnMove.LOGGER.info("Current screen: " + screenClassName + " in package: " + packageName);
 
-        // Use HandledScreen like the working mod - this covers inventory, chests, crafting tables, etc.
+        // Use HandledScreen - this covers inventory, chests, crafting tables, etc.
         if (screen instanceof HandledScreen) {
             //CloseOnMove.LOGGER.info("Detected HandledScreen: " + screenClassName);
             return true;
@@ -78,7 +78,7 @@ public class CloseOnMoveClient implements ClientModInitializer {
             return;
         }
 
-        // Only close HandledScreen and advancement screens
+        // Only close relevant screens
         if (!isClosableScreen(currentScreen)) {
             keyStates.clear();
             return;
@@ -122,10 +122,7 @@ public class CloseOnMoveClient implements ClientModInitializer {
         return false;
     }
 
-    /**
-     * Check if the given code represents a mouse button
-     * GLFW mouse button constants are typically 0-7
-     */
+    // Check if the given code represents a mouse button. GLFW mouse button constants are typically 0-7
     private boolean isMouseButton(int keyCode) {
         return keyCode >= GLFW.GLFW_MOUSE_BUTTON_1 && keyCode <= GLFW.GLFW_MOUSE_BUTTON_LAST;
     }

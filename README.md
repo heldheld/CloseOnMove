@@ -9,7 +9,7 @@ Close in-game GUI's using movement keys, so you can make a quick getaway!
 
 ## What does it do?
 
-Are you like me? - Accidentally opening your inventory mid-battle, or panicking and forgetting how to close the chest GUI when you hear the hissing of a Creeper?
+Are you like me? - Accidentally opening your inventory mid-battle, or panicking and forgetting how to close a chest when you hear the hissing of a Creeper?
 Then this mod is great for you!
 
 Use W, A, S, D or Space to quickly close in-game GUI's such as the inventory, creative menu, chests, advancements screen etc.

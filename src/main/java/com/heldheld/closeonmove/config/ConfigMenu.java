@@ -282,7 +282,7 @@ public class ConfigMenu extends Screen {
             @Override
             public void render(DrawContext context, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean hovered, float tickDelta) {
                 context.drawCenteredTextWithShadow(ConfigMenu.this.textRenderer,
-                        Text.literal("Keys and mouse buttons that exit the GUI's:").styled(style -> style.withColor(Formatting.GRAY)),
+                        Text.literal("Keys (or mouse buttons) that exit the GUI's:").styled(style -> style.withColor(Formatting.GRAY)),
                         x + entryWidth / 2, y + (entryHeight - 9) / 2, Formatting.GRAY.getColorValue());
             }
 

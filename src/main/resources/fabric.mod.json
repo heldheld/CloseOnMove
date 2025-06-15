@@ -3,7 +3,7 @@
 	"id": "closeonmove",
 	"version": "${version}",
 	"name": "CloseOnMove",
-	"description": "Close in-game GUI's when movement keys are pressed, so you can make a quick getaway!",
+	"description": "Close in-game GUI's using movement keys, so you can make a quick getaway!",
 	"authors": [
 		"heldheld"
 	],

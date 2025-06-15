@@ -23,9 +23,6 @@
 		],
 		"client": [
 			"com.heldheld.closeonmove.CloseOnMoveClient"
-		],
-		"modmenu": [
-			"com.heldheld.closeonmove.config.ModMenuIntegration"
 		]
 	},
 	"mixins": [
@@ -33,7 +30,7 @@
 	],
 	"depends": {
 		"fabricloader": ">=0.15.10",
-		"minecraft": ">=1.20.3",
+		"minecraft": ">=1.17 <=1.20.2",
 		"java": ">=21"
 	}
 }

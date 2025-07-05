@@ -191,19 +191,14 @@ public class ConfigMenu extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        // Render background
-        this.renderBackground(context, mouseX, mouseY, delta);
-
-        // Render the keybind list first
-        keybindList.render(context, mouseX, mouseY, delta);
-
-        // Render other widgets (buttons)
+        // Let super.render handle background rendering and all widgets automatically
         super.render(context, mouseX, mouseY, delta);
 
-        // Draw title on top
+        // Draw title on top (after super.render to ensure it's drawn above everything)
+        // Fixed: Added alpha channel (0xFF) to make text visible in 1.21.6
         context.drawCenteredTextWithShadow(this.textRenderer,
                 Text.literal("CloseOnMove Settings").styled(style -> style.withColor(Formatting.WHITE)),
-                width / 2, 20, Formatting.WHITE.getColorValue());
+                width / 2, 20, 0xFFFFFFFF); // Changed from Formatting.WHITE.getColorValue() to 0xFFFFFFFF
     }
 
     private void onCancelClick() {
@@ -281,9 +276,10 @@ public class ConfigMenu extends Screen {
         public class HeaderEntry extends ListEntry {
             @Override
             public void render(DrawContext context, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean hovered, float tickDelta) {
+                // Fixed: Added alpha channel (0xFF) to make text visible in 1.21.6
                 context.drawCenteredTextWithShadow(ConfigMenu.this.textRenderer,
                         Text.literal("Keys (or mouse buttons) that exit the GUI's:").styled(style -> style.withColor(Formatting.GRAY)),
-                        x + entryWidth / 2, y + (entryHeight - 9) / 2, Formatting.GRAY.getColorValue());
+                        x + entryWidth / 2, y + (entryHeight - 9) / 2, 0xFFAAAAAA); // Changed from Formatting.GRAY.getColorValue() to 0xFFAAAAAA
             }
 
             @Override

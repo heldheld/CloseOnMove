@@ -107,8 +107,8 @@ public class CloseOnMoveClient implements ClientModInitializer {
         if (isMouseButton(keyCode)) {
             isCurrentlyPressed = GLFW.glfwGetMouseButton(client.getWindow().getHandle(), keyCode) == GLFW.GLFW_PRESS;
         } else {
-            // It's a keyboard key
-            isCurrentlyPressed = InputUtil.isKeyPressed(client.getWindow().getHandle(), keyCode);
+            // It's a keyboard key - use Window object instead of handle
+            isCurrentlyPressed = InputUtil.isKeyPressed(client.getWindow(), keyCode);
         }
 
         boolean wasInputPreviouslyPressed = keyStates.getOrDefault(keyCode, false);

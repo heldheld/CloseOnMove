@@ -4,53 +4,61 @@ import com.heldheld.closeonmove.CloseOnMove;
 import com.terraformersmc.modmenu.api.ConfigScreenFactory;
 import com.terraformersmc.modmenu.api.ModMenuApi;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.Selectable;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.ElementListWidget;
+import net.minecraft.client.gui.widget.GridWidget;
+import net.minecraft.client.gui.widget.SimplePositioningWidget;
+import net.minecraft.client.gui.widget.ThreePartsLayoutWidget;
+import net.minecraft.screen.ScreenTexts;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Configuration screen for CloseOnMove mod
+ * Compatible with Minecraft 1.21.9 and Mod Menu API
+ */
 public class ConfigMenu extends Screen {
     private final Screen parent;
     private final Config config;
-    private final int[] tempKeys = new int[10]; // 10 slots for keys
-    private int waitingForKeySlot = -1; // -1 = not waiting, 0-9 = slot index
+    private final ThreePartsLayoutWidget layout = new ThreePartsLayoutWidget(this);
 
-    // Entry list widget for keybind buttons
-    private KeybindListWidget keybindList;
+    // Temporary storage for keybinds during editing
+    private final int[] tempKeys = new int[10];
+    private int waitingForKeySlot = -1;
+    private boolean waitingForRelease = false; // Wait for initial click release
 
-    // Bottom buttons
-    private ButtonWidget cancelButton;
-    private ButtonWidget saveQuitButton;
-    private ButtonWidget resetButton;
+    // Track key states to prevent multiple triggers
+    private final boolean[] keyPressed = new boolean[350];
+    private final boolean[] mousePressed = new boolean[8];
 
-    protected ConfigMenu(Screen parent) {
+    // Keybind buttons
+    private final ButtonWidget[] keybindButtons = new ButtonWidget[10];
+
+    public ConfigMenu(Screen parent) {
         super(Text.literal("CloseOnMove Settings"));
         this.parent = parent;
         this.config = Config.getInstance();
 
-        // Initialize temp keys from config
         initializeTempKeys();
     }
 
     private void initializeTempKeys() {
-        // Fill with -1 (unbound) first
+        // Initialize all slots as unbound
         for (int i = 0; i < 10; i++) {
             tempKeys[i] = -1;
         }
 
-        // Get current keys from config and assign to first available slots
-        var currentKeys = config.getCloseKeys();
+        // Load current keys from config
+        List<Integer> currentKeys = config.getCloseKeys();
         for (int i = 0; i < Math.min(currentKeys.size(), 10); i++) {
             tempKeys[i] = currentKeys.get(i);
         }
 
-        // If no keys configured, set defaults
+        // Set defaults if no keys are configured
         if (currentKeys.isEmpty()) {
             tempKeys[0] = GLFW.GLFW_KEY_W;
             tempKeys[1] = GLFW.GLFW_KEY_A;
@@ -62,41 +70,51 @@ public class ConfigMenu extends Screen {
 
     @Override
     protected void init() {
-        // Create the keybind list widget
-        keybindList = new KeybindListWidget(this.client, this.width, this.height - 80, 40, 25);
+        this.layout.addHeader(this.title, this.textRenderer);
 
-        addDrawableChild(keybindList);
+        GridWidget gridWidget = this.layout.addBody(new GridWidget());
+        gridWidget.getMainPositioner().marginX(8).marginY(4);
+        GridWidget.Adder adder = gridWidget.createAdder(2);
 
-        // Bottom buttons - properly centered
-        int bottomButtonWidth = 80;
-        int bottomButtonSpacing = 15;
-        int totalBottomWidth = (bottomButtonWidth * 3) + (bottomButtonSpacing * 2);
-        int bottomStartX = (width - totalBottomWidth) / 2;
-        int bottomY = height - 30;
+        // Add keybind buttons in a 2-column layout
+        for (int i = 0; i < 10; i++) {
+            final int slot = i;
+            keybindButtons[i] = ButtonWidget.builder(
+                    getKeyButtonText(slot),
+                    button -> {
+                        // Only start binding if not already waiting for input
+                        if (waitingForKeySlot == -1) {
+                            startKeyBinding(slot);
+                        }
+                    }
+            ).width(145).build();
 
-        // Cancel button
-        cancelButton = ButtonWidget.builder(Text.literal("Cancel"), button -> {
-                    onCancelClick();
-                })
-                .dimensions(bottomStartX, bottomY, bottomButtonWidth, 20)
-                .build();
-        addDrawableChild(cancelButton);
+            adder.add(keybindButtons[i]);
+        }
 
-        // Save & Quit button
-        saveQuitButton = ButtonWidget.builder(Text.literal("Save & Quit"), button -> {
-                    onSaveQuitClick();
-                })
-                .dimensions(bottomStartX + bottomButtonWidth + bottomButtonSpacing, bottomY, bottomButtonWidth, 20)
-                .build();
-        addDrawableChild(saveQuitButton);
+        // Add bottom buttons
+        GridWidget bottomButtons = this.layout.addFooter(new GridWidget());
+        bottomButtons.getMainPositioner().marginX(8);
+        GridWidget.Adder bottomAdder = bottomButtons.createAdder(3);
 
-        // Reset button
-        resetButton = ButtonWidget.builder(Text.literal("Reset"), button -> {
-                    onResetClick();
-                })
-                .dimensions(bottomStartX + (bottomButtonWidth + bottomButtonSpacing) * 2, bottomY, bottomButtonWidth, 20)
-                .build();
-        addDrawableChild(resetButton);
+        bottomAdder.add(ButtonWidget.builder(
+                ScreenTexts.CANCEL,
+                button -> onCancelClick()
+        ).width(80).build());
+
+        bottomAdder.add(ButtonWidget.builder(
+                Text.literal("Save & Quit"),
+                button -> onSaveClick()
+        ).width(80).build());
+
+        bottomAdder.add(ButtonWidget.builder(
+                Text.literal("Reset"),
+                button -> onResetClick()
+        ).width(80).build());
+
+        this.layout.refreshPositions();
+        SimplePositioningWidget.setPos(this.layout, 0, 0, this.width, this.height, 0.5f, 0.25f);
+        this.layout.forEachChild(this::addDrawableChild);
     }
 
     private Text getKeyButtonText(int slot) {
@@ -108,107 +126,117 @@ public class ConfigMenu extends Screen {
         }
 
         if (waitingForKeySlot == slot) {
-            // Create text with yellow brackets and underlined white key name
             return Text.literal("")
-                    .append(Text.literal(">").styled(style -> style.withColor(Formatting.YELLOW)))
-                    .append(Text.literal(" "))
+                    .append(Text.literal("> ").styled(style -> style.withColor(Formatting.YELLOW)))
                     .append(Text.literal(keyName).styled(style -> style.withUnderline(true).withColor(Formatting.WHITE)))
-                    .append(Text.literal(" "))
-                    .append(Text.literal("<").styled(style -> style.withColor(Formatting.YELLOW)));
+                    .append(Text.literal(" <").styled(style -> style.withColor(Formatting.YELLOW)));
         } else {
             return Text.literal(keyName);
         }
     }
 
     private void startKeyBinding(int slot) {
-        waitingForKeySlot = slot;
-        refreshKeybindList();
-    }
-
-    private void refreshKeybindList() {
-        // Refresh all entries in the list
-        for (KeybindListWidget.ListEntry entry : keybindList.children()) {
-            if (entry instanceof KeybindListWidget.KeybindEntry) {
-                ((KeybindListWidget.KeybindEntry) entry).refreshButton();
-            }
-        }
-    }
-
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // Don't start binding if already waiting - this prevents button re-triggering
         if (waitingForKeySlot != -1) {
-            // Escape cancels key binding and sets to "Not Bound"
-            if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
-                tempKeys[waitingForKeySlot] = -1; // Set to "Not Bound"
-                waitingForKeySlot = -1;
-                refreshKeybindList();
-                return true;
-            }
-
-            // Assign the key
-            tempKeys[waitingForKeySlot] = keyCode;
-            waitingForKeySlot = -1;
-            refreshKeybindList();
-            return true;
+            return;
         }
-
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        waitingForKeySlot = slot;
+        waitingForRelease = true; // Wait for the button click to be released
+        // Reset left mouse button state to prevent immediate trigger
+        mousePressed[GLFW.GLFW_MOUSE_BUTTON_LEFT] = true;
+        refreshKeybindButtons();
     }
 
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // If we're waiting for a key binding and the click is on the keybind list area
-        if (waitingForKeySlot != -1 && keybindList.isMouseOver(mouseX, mouseY)) {
-            // Check if the click is on one of the keybind buttons
-            boolean clickedOnKeybindButton = false;
-            for (KeybindListWidget.ListEntry entry : keybindList.children()) {
-                if (entry instanceof KeybindListWidget.KeybindEntry) {
-                    KeybindListWidget.KeybindEntry keybindEntry = (KeybindListWidget.KeybindEntry) entry;
-                    if (keybindEntry.isMouseOverButton(mouseX, mouseY)) {
-                        clickedOnKeybindButton = true;
-                        break;
-                    }
-                }
+    private void refreshKeybindButtons() {
+        for (int i = 0; i < 10; i++) {
+            if (keybindButtons[i] != null) {
+                keybindButtons[i].setMessage(getKeyButtonText(i));
             }
+        }
+    }
 
-            // If clicked on a keybind button while waiting, assign the mouse button
-            if (clickedOnKeybindButton) {
+    private void handleKeyInput() {
+        if (waitingForKeySlot == -1 || this.client == null || this.client.getWindow() == null) {
+            return;
+        }
+
+        long handle = this.client.getWindow().getHandle();
+
+        // If waiting for release, check if left mouse button is released
+        if (waitingForRelease) {
+            if (GLFW.glfwGetMouseButton(handle, GLFW.GLFW_MOUSE_BUTTON_LEFT) != GLFW.GLFW_PRESS) {
+                waitingForRelease = false;
+            }
+        }
+
+        // Check keyboard keys (GLFW key range is 32-348, but we'll use safe common range)
+        for (int key = GLFW.GLFW_KEY_SPACE; key <= GLFW.GLFW_KEY_LAST; key++) {
+            boolean isPressed = GLFW.glfwGetKey(handle, key) == GLFW.GLFW_PRESS;
+
+            if (isPressed && !keyPressed[key]) {
+                keyPressed[key] = true;
+
+                // Escape clears the binding slot
+                if (key == GLFW.GLFW_KEY_ESCAPE) {
+                    tempKeys[waitingForKeySlot] = -1;
+                    waitingForKeySlot = -1;
+                    waitingForRelease = false;
+                    refreshKeybindButtons();
+                    return;
+                }
+
+                // Assign the key
+                tempKeys[waitingForKeySlot] = key;
+                waitingForKeySlot = -1;
+                waitingForRelease = false; // Reset the flag even though we didn't use mouse
+                refreshKeybindButtons();
+                return;
+            } else if (!isPressed) {
+                keyPressed[key] = false;
+            }
+        }
+
+        // Check mouse buttons
+        for (int button = 0; button < 8; button++) {
+            boolean isPressed = GLFW.glfwGetMouseButton(handle, button) == GLFW.GLFW_PRESS;
+
+            if (isPressed && !mousePressed[button]) {
+                mousePressed[button] = true;
+
+                // Assign the mouse button (don't check if clicking on button anymore)
                 tempKeys[waitingForKeySlot] = button;
                 waitingForKeySlot = -1;
-                refreshKeybindList();
-                return true;
+                refreshKeybindButtons();
+                return;
+            } else if (!isPressed) {
+                mousePressed[button] = false;
             }
         }
-
-        // Cancel key binding if clicking elsewhere
-        if (waitingForKeySlot != -1 && !keybindList.isMouseOver(mouseX, mouseY)) {
-            waitingForKeySlot = -1;
-            refreshKeybindList();
-        }
-
-        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        // Let super.render handle background rendering and all widgets automatically
+        // Render screen background first
         super.render(context, mouseX, mouseY, delta);
 
-        // Draw title on top (after super.render to ensure it's drawn above everything)
-        // Fixed: Added alpha channel (0xFF) to make text visible in 1.21.6
-        context.drawCenteredTextWithShadow(this.textRenderer,
-                Text.literal("CloseOnMove Settings").styled(style -> style.withColor(Formatting.WHITE)),
-                width / 2, 20, 0xFFFFFFFF); // Changed from Formatting.WHITE.getColorValue() to 0xFFFFFFFF
+        // Handle key input for binding
+        handleKeyInput();
+
+        // Draw subtitle text directly below title
+        Text subtitleText = Text.literal("Keys (or mouse buttons) that exit the GUI's:");
+        int subtitleX = this.width / 2;
+        int subtitleY = 25; // Just below the title at y=20
+        context.drawCenteredTextWithShadow(this.textRenderer, subtitleText, subtitleX, subtitleY, 0xFFAAAAAA);
     }
 
     private void onCancelClick() {
-        waitingForKeySlot = -1; // Cancel any pending key binding
+        waitingForKeySlot = -1;
         close();
     }
 
-    private void onSaveQuitClick() {
-        // Convert temp keys to list, excluding unbound (-1) keys
-        java.util.List<Integer> keysToSave = new java.util.ArrayList<>();
+    private void onSaveClick() {
+        // Convert temp keys to list, excluding unbound keys
+        List<Integer> keysToSave = new ArrayList<>();
         for (int key : tempKeys) {
             if (key != -1) {
                 keysToSave.add(key);
@@ -233,135 +261,20 @@ public class ConfigMenu extends Screen {
         tempKeys[4] = GLFW.GLFW_KEY_SPACE;
 
         waitingForKeySlot = -1;
-        refreshKeybindList();
+        refreshKeybindButtons();
+    }
+
+    @Override
+    public boolean shouldCloseOnEsc() {
+        // Don't close on Escape if waiting for key input
+        return waitingForKeySlot == -1;
     }
 
     @Override
     public void close() {
-        waitingForKeySlot = -1; // Cancel any pending key binding
-        this.client.setScreen(this.parent);
-    }
-
-    // Custom ElementListWidget for keybind entries
-    private class KeybindListWidget extends ElementListWidget<KeybindListWidget.ListEntry> {
-        public KeybindListWidget(net.minecraft.client.MinecraftClient client, int width, int height, int top, int itemHeight) {
-            super(client, width, height, top, itemHeight);
-
-            // Add header entry first
-            this.addEntry(new HeaderEntry());
-
-            // Add entries for 5 rows (each row contains 2 buttons)
-            for (int i = 0; i < 5; i++) {
-                this.addEntry(new KeybindEntry(i * 2, i * 2 + 1)); // Pass two slot indices
-            }
-        }
-
-        @Override
-        public void renderWidget(DrawContext context, int mouseX, int mouseY, float delta) {
-            // Call the parent render method to draw the entries
-            super.renderWidget(context, mouseX, mouseY, delta);
-        }
-
-        @Override
-        protected int getScrollbarX() {
-            // Position scrollbar on the right side
-            return this.getX() + this.getWidth() - 6;
-        }
-
-        // Base class for list entries
-        public abstract class ListEntry extends ElementListWidget.Entry<ListEntry> {
-        }
-
-        // Header entry for the label text
-        public class HeaderEntry extends ListEntry {
-            @Override
-            public void render(DrawContext context, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean hovered, float tickDelta) {
-                // Fixed: Added alpha channel (0xFF) to make text visible in 1.21.6
-                context.drawCenteredTextWithShadow(ConfigMenu.this.textRenderer,
-                        Text.literal("Keys (or mouse buttons) that exit the GUI's:").styled(style -> style.withColor(Formatting.GRAY)),
-                        x + entryWidth / 2, y + (entryHeight - 9) / 2, 0xFFAAAAAA); // Changed from Formatting.GRAY.getColorValue() to 0xFFAAAAAA
-            }
-
-            @Override
-            public List<? extends Element> children() {
-                return List.of();
-            }
-
-            @Override
-            public List<? extends Selectable> selectableChildren() {
-                return List.of();
-            }
-        }
-
-        public class KeybindEntry extends ListEntry {
-            private final int leftSlot;
-            private final int rightSlot;
-            private final ButtonWidget leftButton;
-            private final ButtonWidget rightButton;
-
-            public KeybindEntry(int leftSlot, int rightSlot) {
-                this.leftSlot = leftSlot;
-                this.rightSlot = rightSlot;
-
-                this.leftButton = ButtonWidget.builder(getKeyButtonText(leftSlot), button -> {
-                            startKeyBinding(leftSlot);
-                        })
-                        .dimensions(0, 0, 145, 20)
-                        .build();
-
-                this.rightButton = ButtonWidget.builder(getKeyButtonText(rightSlot), button -> {
-                            startKeyBinding(rightSlot);
-                        })
-                        .dimensions(0, 0, 145, 20)
-                        .build();
-            }
-
-            @Override
-            public void render(DrawContext context, int index, int y, int x, int entryWidth, int entryHeight, int mouseX, int mouseY, boolean hovered, float tickDelta) {
-                // Center the buttons properly within the entry
-                int buttonWidth = 145;
-                int buttonSpacing = 10;
-                int totalButtonWidth = (buttonWidth * 2) + buttonSpacing;
-                int startX = x + (entryWidth - totalButtonWidth) / 2;
-                int buttonY = y + (entryHeight - 20) / 2;
-
-                // Left button
-                leftButton.setX(startX);
-                leftButton.setY(buttonY);
-                leftButton.render(context, mouseX, mouseY, tickDelta);
-
-                // Right button
-                rightButton.setX(startX + buttonWidth + buttonSpacing);
-                rightButton.setY(buttonY);
-                rightButton.render(context, mouseX, mouseY, tickDelta);
-            }
-
-            @Override
-            public List<? extends Element> children() {
-                return List.of(leftButton, rightButton);
-            }
-
-            @Override
-            public List<? extends Selectable> selectableChildren() {
-                return List.of(leftButton, rightButton);
-            }
-
-            public void refreshButton() {
-                leftButton.setMessage(getKeyButtonText(leftSlot));
-                rightButton.setMessage(getKeyButtonText(rightSlot));
-            }
-
-            public boolean isMouseOverButton(double mouseX, double mouseY) {
-                return leftButton.isMouseOver(mouseX, mouseY) || rightButton.isMouseOver(mouseX, mouseY);
-            }
-        }
-    }
-
-    // ModMenu integration
-    public static class ModMenuIntegration implements ModMenuApi {
-        @Override
-        public ConfigScreenFactory<?> getModConfigScreenFactory() {
-            return ConfigMenu::new;
+        waitingForKeySlot = -1;
+        if (this.client != null) {
+            this.client.setScreen(this.parent);
         }
     }
 }
